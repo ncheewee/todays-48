@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#141b2b">
+  <meta name="description" content="Today's 48. The same board for everyone, until tomorrow. Plays offline.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Today's 48">
+  <title>Today's 48</title>
+  <link rel="manifest" href="./manifest.json">
+  <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app" id="app">
+    <header>
+      <div class="brand">
+        <h1><small>Today’s</small>48</h1>
+        <p id="when">One board for everyone</p>
+      </div>
+      <div class="scores">
+        <div class="score" id="score-box">
+          <span>Score</span>
+          <strong id="score">0</strong>
+        </div>
+        <div class="score">
+          <span>Today</span>
+          <strong id="best">0</strong>
+        </div>
+      </div>
+    </header>
+    <p id="net" class="net" hidden>Offline — this game still works</p>
+    <div class="board-wrap">
+      <div class="board" id="board" role="group" aria-label="Today’s board. Swipe or use arrow keys to move the tiles.">
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+        <div class="tiles" id="tiles" aria-hidden="true"></div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <button type="button" id="new">Replay</button>
+      <button type="button" id="undo" class="ghost" disabled>Undo</button>
+      <button type="button" id="install" class="ghost" hidden>Install app</button>
+    </div>
+    <p class="note" id="note">Arrow keys, WASD, or a swipe. Everyone gets this board until tomorrow.</p>
+  </div>
+  <p id="status" class="sr-only" aria-live="polite"></p>
+  <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
+    <div class="modal-card">
+      <h2 id="modal-title"></h2>
+      <p id="modal-body"></p>
+      <div class="modal-actions" id="modal-actions"></div>
+    </div>
+  </div>
+  <noscript>This game needs JavaScript. After one online load, it plays with no connection.</noscript>
+  <script type="module" src="./game.js"></script>
+</body>
+</html>

@@ -1,4 +1,4 @@
-const CACHE = "today48-v1";
+const CACHE = "today48-v2";
 
 const FILES = [
   "./",
@@ -14,18 +14,37 @@ const FILES = [
   "./icons/apple-touch-icon.png",
 ];
 
-// GitHub Pages redirects the folder URL. cache.put rejects redirected responses,
-// so store a fresh response with the same body.
+// GitHub Pages redirects the folder URL, and cache.put rejects redirected
+// responses. It also sends Vary: Accept-Encoding, which can hide a saved
+// copy from the home-screen launch. Store a plain copy of the body.
 async function store(cache, request, response) {
+  const headers = new Headers(response.headers);
+  headers.delete("Vary");
   const body = await response.blob();
   await cache.put(
     request,
     new Response(body, {
       status: response.status,
       statusText: response.statusText,
-      headers: response.headers,
+      headers,
     }),
   );
+}
+
+async function fromCache(cache, request) {
+  const options = { ignoreVary: true, ignoreSearch: true };
+  const hit = await cache.match(request, options);
+  if (hit) return hit;
+  if (request.mode !== "navigate") return undefined;
+  return (await cache.match("./index.html", options)) || (await cache.match("./", options));
+}
+
+function refresh(cache, request) {
+  return fetch(request)
+    .then(async (response) => {
+      if (response.ok) await store(cache, request, response);
+    })
+    .catch(() => {});
 }
 
 self.addEventListener("install", (event) => {
@@ -59,20 +78,18 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE);
-      const cached = await cache.match(event.request);
-      const fresh = fetch(event.request)
-        .then(async (response) => {
-          if (response.ok) await store(cache, event.request, response.clone());
-          return response;
-        })
-        .catch(() => null);
-      if (cached) return cached;
-      const response = await fresh;
-      if (response) return response;
-      if (event.request.mode === "navigate") {
-        return (await cache.match("./index.html")) || (await cache.match("./"));
+      const cached = await fromCache(cache, event.request);
+      if (cached) {
+        event.waitUntil(refresh(cache, event.request));
+        return cached;
       }
-      return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
+      try {
+        const response = await fetch(event.request);
+        if (response.ok) await store(cache, event.request, response.clone());
+        return response;
+      } catch {
+        return new Response("Offline", { status: 503, headers: { "Content-Type": "text/plain" } });
+      }
     })(),
   );
 });

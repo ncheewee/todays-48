@@ -514,7 +514,7 @@ window.addEventListener("appinstalled", () => {
 });
 
 if ("serviceWorker" in navigator) {
-  navigator.serviceWorker.register("./sw.js").catch(() => {
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {
     // Registration fails on file:// and on a few locked-down browsers. The game still plays online.
   });
 }

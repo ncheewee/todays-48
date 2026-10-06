@@ -8,6 +8,7 @@ import {
   hashDay,
   makeGame,
   move,
+  replay,
   resumeDaily,
   restore,
   seededRng,
@@ -272,6 +273,15 @@ test("the puzzle flips at midnight in Singapore", () => {
 
 test("a day that is not a date is rejected", () => {
   assert.throws(() => createDaily("yesterday"), /bad day/);
+});
+
+test("replay scores the same moves the game would", () => {
+  const day = "2026-10-06";
+  const moves = ["left", "up", "right", "down", "left", "left", "up"];
+  const game = createDaily(day);
+  for (const dir of moves) move(game, dir);
+  assert.equal(replay(day, moves), game.score);
+  assert.throws(() => replay(day, ["sideways"]), /bad move/);
 });
 
 function cellsFrom(snap) {

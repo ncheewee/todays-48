@@ -42,6 +42,19 @@ export function seededRng(seed) {
   return step;
 }
 
+const MOVE_NAMES = new Set(["left", "right", "up", "down"]);
+
+export function replay(day, moves) {
+  if (!DAY.test(day)) throw new Error("bad day");
+  if (!Array.isArray(moves) || moves.length > 2000) throw new Error("bad moves");
+  const game = createDaily(day);
+  for (const dir of moves) {
+    if (!MOVE_NAMES.has(dir)) throw new Error("bad move");
+    move(game, dir);
+  }
+  return game.score;
+}
+
 export function dayKey(date = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Singapore",

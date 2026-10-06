@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Today's 48",
-  "short_name": "Today 48",
-  "description": "The same 2048 board for everyone today. Plays offline.",
+  "name": "2048 Challenge",
+  "short_name": "2048",
+  "description": "One 2048 board for everyone today. Sign in to climb the board. Plays offline.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

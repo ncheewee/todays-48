@@ -4,12 +4,12 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#141b2b">
-  <meta name="description" content="Today's 48. The same board for everyone, until tomorrow. Plays offline.">
+  <meta name="description" content="2048 Challenge. One board for everyone today. Sign in to climb it. Plays offline.">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Today's 48">
-  <title>Today's 48</title>
+  <meta name="apple-mobile-web-app-title" content="2048">
+  <title>2048 Challenge</title>
   <link rel="manifest" href="./manifest.json">
   <link rel="icon" href="./icons/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
@@ -19,8 +19,17 @@
   <div class="app" id="app">
     <header>
       <div class="brand">
-        <h1><small>Today’s</small>48</h1>
+        <h1><small>Challenge</small>2048</h1>
         <p id="when">One board for everyone</p>
+        <div class="who" id="who">
+          <div id="google"></div>
+          <button type="button" id="who-you" class="who-you" hidden>
+            <img id="who-pic" alt="" width="28" height="28" hidden>
+            <span id="who-name"></span>
+          </button>
+          <button type="button" id="sign-out" class="ghost" hidden>Sign out</button>
+        </div>
+        <div id="rank" class="rank">Sign in to join today’s board.</div>
       </div>
       <div class="scores">
         <div class="score" id="score-box">
@@ -35,7 +44,7 @@
     </header>
     <p id="net" class="net" hidden>Offline — this game still works</p>
     <div class="board-wrap">
-      <div class="board" id="board" role="group" aria-label="Today’s board. Swipe or use arrow keys to move the tiles.">
+      <div class="board" id="board" role="group" aria-label="2048 Challenge board. Swipe or use arrow keys to move the tiles.">
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
         <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
@@ -46,9 +55,10 @@
     <div class="toolbar">
       <button type="button" id="new">Replay</button>
       <button type="button" id="undo" class="ghost" disabled>Undo</button>
+      <button type="button" id="open-board" class="ghost">Board</button>
       <button type="button" id="install" class="ghost" hidden>Install app</button>
     </div>
-    <p class="note" id="note">Arrow keys, WASD, or a swipe. Everyone gets this board until tomorrow.</p>
+    <p class="note" id="note">Arrow keys, WASD, or a swipe. Sign in to put a score on today’s board.</p>
   </div>
   <p id="status" class="sr-only" aria-live="polite"></p>
   <div id="modal" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
@@ -58,7 +68,19 @@
       <div class="modal-actions" id="modal-actions"></div>
     </div>
   </div>
+  <div id="standings" class="modal" hidden role="dialog" aria-modal="true" aria-labelledby="standings-title">
+    <div class="modal-card standings-card">
+      <h2 id="standings-title">Today’s board</h2>
+      <p id="standings-when"></p>
+      <ol id="standings-list"></ol>
+      <p id="standings-empty">No scores yet. Sign in and play.</p>
+      <div class="modal-actions">
+        <button type="button" id="standings-close">Close</button>
+      </div>
+    </div>
+  </div>
   <noscript>This game needs JavaScript. After one online load, it plays with no connection.</noscript>
+  <script async src="https://accounts.google.com/gsi/client"></script>
   <script type="module" src="./game.js"></script>
 </body>
 </html>

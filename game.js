@@ -9,6 +9,10 @@ import {
 } from "./engine.mjs";
 
 const SAVE_KEY = "today48-save";
+const SESSION_KEY = "challenge48-session";
+const CLIENT_ID = "309032431650-0lbuaj6igc4s9tc0gddv92ffe6ngkrr4.apps.googleusercontent.com";
+const BOARD_API = "https://br-silent-salad-az0i47x7-board.compute.c-3.ap-southeast-1.aws.neon.tech/";
+const MOVE_NAMES = new Set(["left", "right", "up", "down"]);
 
 const board = document.getElementById("board");
 const tilesEl = document.getElementById("tiles");
@@ -20,6 +24,18 @@ const newBtn = document.getElementById("new");
 const undoBtn = document.getElementById("undo");
 const installBtn = document.getElementById("install");
 const note = document.getElementById("note");
+const googleEl = document.getElementById("google");
+const whoYou = document.getElementById("who-you");
+const whoPic = document.getElementById("who-pic");
+const whoName = document.getElementById("who-name");
+const signOutBtn = document.getElementById("sign-out");
+const rankEl = document.getElementById("rank");
+const openBoardBtn = document.getElementById("open-board");
+const standings = document.getElementById("standings");
+const standingsWhen = document.getElementById("standings-when");
+const standingsList = document.getElementById("standings-list");
+const standingsEmpty = document.getElementById("standings-empty");
+const standingsClose = document.getElementById("standings-close");
 const net = document.getElementById("net");
 const status = document.getElementById("status");
 const app = document.getElementById("app");
@@ -33,8 +49,14 @@ let game = createDaily(puzzleDay);
 let best = 0;
 let bestMark = 0;
 let continued = false;
+let moves = [];
+let movesTrusted = true;
 let undoStack = [];
 let busy = false;
+let boardMe = null;
+let boardEpoch = 0;
+let submitTimer = 0;
+let googleReady = false;
 let queued = null;
 let modalKind = null;
 let deferredPrompt = null;
@@ -79,21 +101,26 @@ function readSave() {
   }
 }
 
+function validMoves(list) {
+  if (!Array.isArray(list) || list.length > 2000) return null;
+  if (!list.every((dir) => MOVE_NAMES.has(dir))) return null;
+  return list.slice();
+}
+
 function save() {
   try {
-    localStorage.setItem(
-      SAVE_KEY,
-      JSON.stringify({
-        v: 1,
-        day: puzzleDay,
-        tiles: game.tiles.map(({ id, value, r, c }) => ({ id, value, r, c })),
-        score: game.score,
-        nextId: game.nextId,
-        draw: game.rng.draw(),
-        best,
-        continued,
-      }),
-    );
+    const payload = {
+      v: 1,
+      day: puzzleDay,
+      tiles: game.tiles.map(({ id, value, r, c }) => ({ id, value, r, c })),
+      score: game.score,
+      nextId: game.nextId,
+      draw: game.rng.draw(),
+      best,
+      continued,
+    };
+    if (movesTrusted) payload.moves = moves;
+    localStorage.setItem(SAVE_KEY, JSON.stringify(payload));
   } catch {
     // Private mode can block storage. The board still plays for this visit.
   }
@@ -107,8 +134,21 @@ function boot() {
     best = 0;
     bestMark = 0;
     continued = false;
+    moves = [];
+    movesTrusted = true;
     save();
     return;
+  }
+  const tracked = validMoves(saved.moves);
+  if (tracked) {
+    moves = tracked;
+    movesTrusted = true;
+  } else if ((saved.score || 0) === 0 && !Array.isArray(saved.moves)) {
+    moves = [];
+    movesTrusted = true;
+  } else {
+    moves = [];
+    movesTrusted = false;
   }
   game = resumeDaily(puzzleDay, saved.tiles, saved.score || 0, saved.draw);
   const maxId = saved.tiles.reduce((max, tile) => Math.max(max, tile.id), 0);
@@ -273,6 +313,8 @@ function beginToday() {
   best = 0;
   bestMark = 0;
   continued = false;
+  moves = [];
+  movesTrusted = true;
   undoStack = [];
   queued = null;
   busy = false;
@@ -284,6 +326,7 @@ function beginToday() {
   paintDate();
   syncUndo();
   setStatus(`Today’s board, ${prettyDay(puzzleDay)}.`);
+  loadBoard();
 }
 
 function startNew() {
@@ -294,6 +337,8 @@ function startNew() {
   queued = null;
   busy = false;
   continued = false;
+  moves = [];
+  movesTrusted = true;
   undoStack = [];
   bestMark = best;
   game = createDaily(puzzleDay);
@@ -308,6 +353,7 @@ function startNew() {
 function undo() {
   if (!undoStack.length) return;
   const snap = undoStack.pop();
+  if (movesTrusted && moves.length) moves.pop();
   restore(game, snap);
   if (!hasWon()) continued = false;
   busy = false;
@@ -318,6 +364,8 @@ function undo() {
   paintScore();
   syncUndo();
   setStatus(`Undone. Score ${game.score}.`);
+  if (movesTrusted && readSession() && game.score > 0) scheduleSubmit();
+  else clearTimeout(submitTimer);
 }
 
 function runAction(action) {
@@ -351,6 +399,14 @@ function tryMove(dir) {
   const before = snapshot(game);
   const result = move(game, dir);
   if (!result.moved) return null;
+  if (movesTrusted) {
+    if (moves.length >= 2000) {
+      movesTrusted = false;
+      moves = [];
+    } else {
+      moves.push(dir);
+    }
+  }
   undoStack.push(before);
   if (undoStack.length > 40) undoStack.shift();
   if (game.score > best) best = game.score;
@@ -369,6 +425,7 @@ function tryMove(dir) {
   if (won && dead) openModal("winlose");
   else if (dead) openModal("lose");
   else if (won) openModal("win");
+  if (movesTrusted && readSession() && game.score > 0) scheduleSubmit();
   return result;
 }
 
@@ -385,7 +442,7 @@ function release() {
 }
 
 function onInput(dir) {
-  if (modalKind) return;
+  if (modalKind || !standings.hidden) return;
   if (!ensureToday()) return;
   if (busy) {
     queued = dir;
@@ -410,6 +467,11 @@ const KEYS = {
 };
 
 window.addEventListener("keydown", (event) => {
+  if (!modalKind && !standings.hidden && event.key === "Escape") {
+    event.preventDefault();
+    closeStandings();
+    return;
+  }
   if (modalKind && event.key === "Escape") {
     event.preventDefault();
     if (modalKind === "win") runAction("keep");
@@ -474,8 +536,14 @@ undoBtn.addEventListener("click", () => {
   if (!busy) undo();
 });
 
-window.addEventListener("online", syncNet);
-window.addEventListener("offline", syncNet);
+window.addEventListener("online", () => {
+  syncNet();
+  loadBoard();
+});
+window.addEventListener("offline", () => {
+  syncNet();
+  paintRank();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && dayKey() !== puzzleDay && modalKind !== "nextday") {
     openModal("nextday");
@@ -485,9 +553,8 @@ document.addEventListener("visibilitychange", () => {
 const standalone =
   window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
 const ios = /iphone|ipad|ipod/i.test(navigator.userAgent);
-if (standalone) note.textContent = "Arrow keys, WASD, or a swipe.";
-else if (ios) {
-  note.textContent = "Swipe to play. To keep it: Share, then Add to Home Screen. It works offline after that.";
+if (ios && !standalone) {
+  note.textContent = "Swipe to play. To keep it: Share, then Add to Home Screen. Sign in to put a score on today’s board.";
 }
 
 window.addEventListener("beforeinstallprompt", (event) => {
@@ -510,7 +577,6 @@ installBtn.addEventListener("click", async () => {
 
 window.addEventListener("appinstalled", () => {
   installBtn.hidden = true;
-  note.textContent = "Arrow keys, WASD, or a swipe.";
 });
 
 if ("serviceWorker" in navigator) {
@@ -519,10 +585,288 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+function cleanName(value) {
+  const cleaned = String(value || "").replace(/[<>]/g, "").trim().slice(0, 40);
+  return cleaned || "Player";
+}
+
+function safePicture(value) {
+  if (typeof value !== "string" || value.length > 500) return "";
+  try {
+    const url = new URL(value);
+    const host = url.hostname;
+    if (url.protocol !== "https:") return "";
+    if (host !== "googleusercontent.com" && !host.endsWith(".googleusercontent.com")) return "";
+    return url.href;
+  } catch {
+    return "";
+  }
+}
+
+function decodePart(part) {
+  const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+  const binary = atob(padded);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  return JSON.parse(new TextDecoder().decode(bytes));
+}
+
+function readSession() {
+  try {
+    const data = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
+    if (!data || typeof data.credential !== "string" || !Number.isInteger(data.exp)) return null;
+    if (data.exp * 1000 < Date.now() + 30_000) {
+      sessionStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+function paintRank() {
+  const session = readSession();
+  if (!navigator.onLine) {
+    rankEl.textContent = "The board needs a connection.";
+    return;
+  }
+  if (!session) {
+    rankEl.textContent = "Sign in to join today’s board.";
+    return;
+  }
+  if (!movesTrusted && game.score > 0) {
+    rankEl.textContent = "Replay today to put a score on the board.";
+    return;
+  }
+  if (boardMe?.rank) {
+    rankEl.textContent = `On the board, rank ${boardMe.rank}.`;
+    return;
+  }
+  rankEl.textContent = "Signed in. Play to join today’s board.";
+}
+
+function paintWho() {
+  const session = readSession();
+  googleEl.hidden = !!session;
+  whoYou.hidden = !session;
+  signOutBtn.hidden = !session;
+  if (!session) {
+    whoPic.hidden = true;
+    whoPic.removeAttribute("src");
+    whoName.textContent = "";
+  } else {
+    whoName.textContent = session.name || "Player";
+    const picture = safePicture(session.picture);
+    if (picture) {
+      whoPic.src = picture;
+      whoPic.referrerPolicy = "no-referrer";
+      whoPic.hidden = false;
+    } else {
+      whoPic.hidden = true;
+      whoPic.removeAttribute("src");
+    }
+  }
+  paintRank();
+}
+
+function signOut() {
+  boardMe = null;
+  try {
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // The board still shows. The next visit simply asks again.
+  }
+  paintWho();
+  loadBoard();
+}
+
+function onCredential(response) {
+  const credential = response?.credential;
+  if (!credential) return;
+  let payload;
+  try {
+    payload = decodePart(credential.split(".")[1] || "");
+  } catch {
+    return;
+  }
+  if (typeof payload.sub !== "string" || !Number.isInteger(payload.exp)) return;
+  try {
+    sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        credential,
+        name: cleanName(payload.name),
+        picture: safePicture(payload.picture),
+        sub: payload.sub,
+        exp: payload.exp,
+      }),
+    );
+  } catch {
+    return;
+  }
+  paintWho();
+  if (movesTrusted && game.score > 0) scheduleSubmit(0);
+  else loadBoard();
+}
+
+function startGoogle() {
+  if (googleReady || !window.google?.accounts?.id) return;
+  googleReady = true;
+  try {
+    window.google.accounts.id.initialize({
+      client_id: CLIENT_ID,
+      callback: onCredential,
+      auto_select: false,
+      cancel_on_tap_outside: true,
+    });
+    window.google.accounts.id.renderButton(googleEl, {
+      theme: "filled_black",
+      size: "medium",
+      shape: "pill",
+      text: "signin_with",
+      width: 220,
+    });
+  } catch {
+    googleReady = false;
+  }
+}
+
+function applyBoard(data) {
+  boardMe = data?.me || null;
+  paintRank();
+  if (standings.hidden) return;
+  standingsWhen.textContent = prettyDay(data?.day || puzzleDay);
+  standingsList.replaceChildren();
+  const rows = Array.isArray(data?.rows) ? data.rows : [];
+  standingsEmpty.hidden = rows.length > 0;
+  standingsEmpty.textContent = "No scores yet. Sign in and play.";
+  for (const row of rows) {
+    const item = document.createElement("li");
+    if (row.you) item.className = "you";
+    const place = document.createElement("span");
+    place.className = "place";
+    place.textContent = String(row.rank);
+    const person = document.createElement("span");
+    person.className = "person";
+    const picture = safePicture(row.picture);
+    if (picture) {
+      const img = document.createElement("img");
+      img.alt = "";
+      img.referrerPolicy = "no-referrer";
+      img.src = picture;
+      person.appendChild(img);
+    }
+    const name = document.createElement("span");
+    name.textContent = cleanName(row.name);
+    person.appendChild(name);
+    const score = document.createElement("strong");
+    score.textContent = String(row.score);
+    item.append(place, person, score);
+    standingsList.appendChild(item);
+  }
+}
+
+function showBoardError() {
+  if (standings.hidden) return;
+  standingsList.replaceChildren();
+  standingsEmpty.hidden = false;
+  standingsEmpty.textContent = navigator.onLine
+    ? "The board didn’t load. Try again."
+    : "The board needs a connection.";
+}
+
+async function loadBoard() {
+  paintRank();
+  if (!BOARD_API || !navigator.onLine) {
+    showBoardError();
+    return;
+  }
+  const epoch = ++boardEpoch;
+  const headers = {};
+  const session = readSession();
+  if (session) headers.Authorization = `Bearer ${session.credential}`;
+  try {
+    const response = await fetch(BOARD_API, { headers });
+    if (epoch !== boardEpoch) return;
+    if (response.status === 401) {
+      if (session) signOut();
+      return;
+    }
+    if (!response.ok) {
+      showBoardError();
+      return;
+    }
+    applyBoard(await response.json());
+  } catch {
+    if (epoch === boardEpoch) showBoardError();
+  }
+}
+
+function scheduleSubmit(delay = 500) {
+  clearTimeout(submitTimer);
+  submitTimer = setTimeout(submitScore, delay);
+}
+
+async function submitScore() {
+  const session = readSession();
+  if (!session || !BOARD_API || !movesTrusted || !navigator.onLine || game.score <= 0) return;
+  const epoch = ++boardEpoch;
+  const body = JSON.stringify({ moves: moves.slice() });
+  try {
+    const response = await fetch(BOARD_API, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.credential}`,
+        "Content-Type": "application/json",
+      },
+      body,
+    });
+    if (epoch !== boardEpoch) return;
+    if (response.status === 401) {
+      signOut();
+      return;
+    }
+    if (!response.ok) return;
+    applyBoard(await response.json());
+  } catch {
+    if (epoch === boardEpoch) showBoardError();
+  }
+}
+
+function openStandings() {
+  if (modalKind) return;
+  standings.hidden = false;
+  app.setAttribute("aria-hidden", "true");
+  standingsWhen.textContent = prettyDay(puzzleDay);
+  standingsClose.focus();
+  loadBoard();
+}
+
+function closeStandings() {
+  standings.hidden = true;
+  if (!modalKind) app.removeAttribute("aria-hidden");
+  openBoardBtn.focus({ preventScroll: true });
+}
+
+whoYou.addEventListener("click", openStandings);
+openBoardBtn.addEventListener("click", openStandings);
+signOutBtn.addEventListener("click", signOut);
+standingsClose.addEventListener("click", closeStandings);
+standings.addEventListener("click", (event) => {
+  if (event.target === standings) closeStandings();
+});
+
+const googleScript = document.querySelector("script[src*='accounts.google.com/gsi/client']");
+if (window.google?.accounts?.id) startGoogle();
+else googleScript?.addEventListener("load", startGoogle, { once: true });
+
 boot();
 paintDate();
 render();
 paintScore();
 syncUndo();
 syncNet();
+paintWho();
+loadBoard();
 maybeModalOnLoad();

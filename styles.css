@@ -371,12 +371,19 @@ button.ghost:hover { background: rgba(246, 241, 230, 0.06); }
 
 .modal-card button.ghost:hover { background: rgba(28, 36, 51, 0.05); }
 
-.standings-card { width: min(100%, 380px); }
+.standings-card {
+  width: min(100%, 400px);
+  max-height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+.standings-card .modal-actions { margin-top: 18px; }
 
 .standings-list {
   list-style: none;
-  max-height: min(46dvh, 420px);
-  margin: 12px 0 0;
+  max-height: min(52dvh, 460px);
+  margin: 14px 0 0;
   padding: 0;
   overflow: auto;
 }
@@ -385,41 +392,76 @@ button.ghost:hover { background: rgba(246, 241, 230, 0.06); }
 
 .standings-list li {
   display: grid;
-  grid-template-columns: 2rem minmax(0, 1fr) auto;
-  gap: 8px;
+  grid-template-columns: 2.4rem minmax(0, 1fr) auto;
+  column-gap: 12px;
   align-items: center;
-  padding: 8px 10px;
-  border-radius: 10px;
+  min-height: 56px;
+  margin: 0;
+  padding: 6px 8px;
+  border-radius: 12px;
+  list-style: none;
 }
 
-.standings-list li.you { background: #f6e3a8; }
+.standings-list li::marker { content: none; }
+
+.standings-list li.you { background: #f3e2ae; }
 
 .standings-list .place {
+  justify-self: end;
   color: #8a8175;
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  font-size: 1.2rem;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  line-height: 1;
 }
 
+.standings-list li.lead .place { color: #8d6814; }
+
 .standings-list .person {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   min-width: 0;
 }
 
-.standings-list .person img {
-  width: 28px;
-  height: 28px;
+.standings-list .person img,
+.standings-list .face {
+  width: 36px;
+  height: 36px;
+  flex: none;
   border-radius: 50%;
   object-fit: cover;
+  box-shadow: inset 0 0 0 1px rgba(28, 36, 51, 0.14);
 }
 
-.standings-list .person span {
+.standings-list .face {
+  display: grid;
+  place-items: center;
+  background: #ead9b6;
+  color: #3a2c12;
+  font-size: 0.95rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.standings-list .person span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.2;
 }
 
-.standings-list strong { font-variant-numeric: tabular-nums; }
+.standings-list strong {
+  font-family: "Iowan Old Style", Palatino, Georgia, serif;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.03em;
+  line-height: 1;
+}
+
+#standings-empty { text-align: center; }
 
 #standings-empty[hidden] { display: none; }
 

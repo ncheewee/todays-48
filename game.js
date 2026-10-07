@@ -598,6 +598,19 @@ function cleanName(value) {
   return cleaned || "Player";
 }
 
+function formatScore(value) {
+  const score = Number(value);
+  return Number.isFinite(score) ? score.toLocaleString("en-GB") : "0";
+}
+
+function faceFor(name) {
+  const face = document.createElement("span");
+  face.className = "face";
+  face.setAttribute("aria-hidden", "true");
+  face.textContent = cleanName(name).slice(0, 1).toUpperCase();
+  return face;
+}
+
 function safePicture(value) {
   if (typeof value !== "string" || value.length > 500) return "";
   try {
@@ -751,25 +764,31 @@ function applyBoard(data) {
   standingsEmpty.textContent = "No scores yet. Sign in and play.";
   for (const row of rows) {
     const item = document.createElement("li");
-    if (row.you) item.className = "you";
+    if (row.rank === 1) item.classList.add("lead");
+    if (row.you) item.classList.add("you");
     const place = document.createElement("span");
     place.className = "place";
     place.textContent = String(row.rank);
     const person = document.createElement("span");
     person.className = "person";
     const picture = safePicture(row.picture);
+    const name = document.createElement("span");
+    name.textContent = cleanName(row.name);
     if (picture) {
       const img = document.createElement("img");
       img.alt = "";
+      img.width = 36;
+      img.height = 36;
       img.referrerPolicy = "no-referrer";
       img.src = picture;
+      img.addEventListener("error", () => img.replaceWith(faceFor(row.name)));
       person.appendChild(img);
+    } else {
+      person.appendChild(faceFor(row.name));
     }
-    const name = document.createElement("span");
-    name.textContent = cleanName(row.name);
     person.appendChild(name);
     const score = document.createElement("strong");
-    score.textContent = String(row.score);
+    score.textContent = formatScore(row.score);
     item.append(place, person, score);
     standingsList.appendChild(item);
   }

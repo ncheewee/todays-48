@@ -395,7 +395,7 @@ button.ghost:hover { background: rgba(246, 241, 230, 0.06); }
   grid-template-columns: 2.4rem minmax(0, 1fr) auto;
   column-gap: 12px;
   align-items: center;
-  min-height: 56px;
+  min-height: 60px;
   margin: 0;
   padding: 6px 8px;
   border-radius: 12px;
@@ -445,12 +445,31 @@ button.ghost:hover { background: rgba(246, 241, 230, 0.06); }
   line-height: 1;
 }
 
-.standings-list .person span:last-child {
+.standings-list .identity {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+}
+
+.standings-list .name {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   line-height: 1.2;
 }
+
+.standings-list .pb {
+  color: #7a7166;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+
+.standings-list li.you .pb { color: #6d5a2e; }
 
 .standings-list strong {
   font-family: "Iowan Old Style", Palatino, Georgia, serif;

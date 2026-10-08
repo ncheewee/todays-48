@@ -1,4 +1,4 @@
-const CACHE = "today48-v5";
+const CACHE = "today48-v6";
 
 const FILES = [
   "./",

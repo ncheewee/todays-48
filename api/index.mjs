@@ -128,12 +128,22 @@ function displayPicture(value) {
   }
 }
 
+function wholeNumber(value) {
+  const number = Number(value);
+  return Number.isInteger(number) && number >= 0 ? number : null;
+}
+
 async function standings(day, sub) {
   const listed = await pool.query(
-    `select google_sub, name, picture, score
-     from challenge_scores
-     where day = $1
-     order by score desc, updated_at asc
+    `select s.google_sub, s.name, s.picture, s.score, b.pb
+     from challenge_scores s
+     join (
+       select google_sub, max(score)::int as pb
+       from challenge_scores
+       group by google_sub
+     ) b on b.google_sub = s.google_sub
+     where s.day = $1
+     order by s.score desc, s.updated_at asc
      limit 20`,
     [day],
   );
@@ -142,13 +152,27 @@ async function standings(day, sub) {
     const mine = await pool.query(
       `select name, score,
               1 + (select count(*)::int from challenge_scores other
-                   where other.day = $1 and other.score > challenge_scores.score) as rank
+                   where other.day = $1 and other.score > challenge_scores.score) as rank,
+              (select max(score)::int from challenge_scores earlier
+               where earlier.google_sub = challenge_scores.google_sub) as pb
        from challenge_scores
        where day = $1 and google_sub = $2`,
       [day, sub],
     );
     if (mine.rows[0]) {
-      me = { name: mine.rows[0].name, score: mine.rows[0].score, rank: mine.rows[0].rank };
+      me = {
+        name: mine.rows[0].name,
+        score: mine.rows[0].score,
+        rank: mine.rows[0].rank,
+        pb: wholeNumber(mine.rows[0].pb),
+      };
+    } else {
+      const earlier = await pool.query(
+        `select max(score)::int as pb from challenge_scores where google_sub = $1`,
+        [sub],
+      );
+      const pb = wholeNumber(earlier.rows[0]?.pb);
+      if (pb) me = { pb };
     }
   }
   let lastScore = null;
@@ -162,6 +186,7 @@ async function standings(day, sub) {
       name: row.name,
       picture: row.picture,
       score: row.score,
+      pb: wholeNumber(row.pb),
       you: sub != null && row.google_sub === sub,
     };
   });

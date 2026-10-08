@@ -54,6 +54,7 @@ let movesTrusted = true;
 let undoStack = [];
 let busy = false;
 let boardMe = null;
+let knownPb = null;
 let boardEpoch = 0;
 let submitTimer = 0;
 let googleReady = false;
@@ -245,6 +246,7 @@ function hasWon() {
 
 function scoreLine() {
   const line = `Score ${game.score}.`;
+  if (Number.isInteger(knownPb) && game.score > knownPb) return `${line} That’s a new personal best.`;
   if (game.score > bestMark) return `${line} That’s a new best for today.`;
   return line;
 }
@@ -646,6 +648,11 @@ function readSession() {
   }
 }
 
+function pbPhrase() {
+  if (!Number.isInteger(boardMe?.pb) || boardMe.pb <= 0) return "";
+  return ` PB ${formatScore(boardMe.pb)}.`;
+}
+
 function paintRank() {
   const session = readSession();
   if (!navigator.onLine) {
@@ -657,11 +664,15 @@ function paintRank() {
     return;
   }
   if (!movesTrusted && game.score > 0) {
-    rankEl.textContent = "Replay today to put a score on the board.";
+    rankEl.textContent = `Replay today to put a score on the board.${pbPhrase()}`;
     return;
   }
   if (boardMe?.rank) {
-    rankEl.textContent = `On the board, rank ${boardMe.rank}.`;
+    rankEl.textContent = `On the board, rank ${boardMe.rank}.${pbPhrase()}`;
+    return;
+  }
+  if (boardMe?.pb) {
+    rankEl.textContent = `PB ${formatScore(boardMe.pb)}. Play to join today’s board.`;
     return;
   }
   rankEl.textContent = "Signed in. Play to join today’s board.";
@@ -693,6 +704,7 @@ function paintWho() {
 
 function signOut() {
   boardMe = null;
+  knownPb = null;
   try {
     sessionStorage.removeItem(SESSION_KEY);
   } catch {
@@ -754,7 +766,9 @@ function startGoogle() {
 }
 
 function applyBoard(data) {
-  boardMe = data?.me || null;
+  const next = data?.me || null;
+  if (knownPb == null && Number.isInteger(next?.pb) && next.pb > 0) knownPb = next.pb;
+  boardMe = next;
   paintRank();
   if (standings.hidden) return;
   standingsWhen.textContent = prettyDay(data?.day || puzzleDay);
@@ -772,8 +786,18 @@ function applyBoard(data) {
     const person = document.createElement("span");
     person.className = "person";
     const picture = safePicture(row.picture);
+    const identity = document.createElement("span");
+    identity.className = "identity";
     const name = document.createElement("span");
+    name.className = "name";
     name.textContent = cleanName(row.name);
+    identity.appendChild(name);
+    if (Number.isInteger(row.pb) && row.pb > 0) {
+      const pb = document.createElement("span");
+      pb.className = "pb";
+      pb.textContent = `PB ${formatScore(row.pb)}`;
+      identity.appendChild(pb);
+    }
     if (picture) {
       const img = document.createElement("img");
       img.alt = "";
@@ -786,7 +810,7 @@ function applyBoard(data) {
     } else {
       person.appendChild(faceFor(row.name));
     }
-    person.appendChild(name);
+    person.appendChild(identity);
     const score = document.createElement("strong");
     score.textContent = formatScore(row.score);
     item.append(place, person, score);

@@ -44,7 +44,7 @@ export function seededRng(seed) {
 
 const MOVE_NAMES = new Set(["left", "right", "up", "down"]);
 
-export function replay(day, moves) {
+export function play(day, moves) {
   if (!DAY.test(day)) throw new Error("bad day");
   if (!Array.isArray(moves) || moves.length > 2000) throw new Error("bad moves");
   const game = createDaily(day);
@@ -52,7 +52,11 @@ export function replay(day, moves) {
     if (!MOVE_NAMES.has(dir)) throw new Error("bad move");
     move(game, dir);
   }
-  return game.score;
+  return game;
+}
+
+export function replay(day, moves) {
+  return play(day, moves).score;
 }
 
 export function dayKey(date = new Date()) {

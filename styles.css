@@ -471,6 +471,29 @@ button.ghost:hover { background: rgba(246, 241, 230, 0.06); }
 
 .standings-list li.you .pb { color: #6d5a2e; }
 
+.standings-list .result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+}
+
+.standings-list .state {
+  color: #7a7166;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.standings-list .state.finished { color: #8d6814; }
+
+.standings-list li.you .state { color: #6d5a2e; }
+
+.standings-list li.you .state.finished { color: #6a4e10; }
+
 .standings-list strong {
   font-family: "Iowan Old Style", Palatino, Georgia, serif;
   font-size: 1.25rem;

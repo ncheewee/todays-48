@@ -1,5 +1,5 @@
 import pg from "pg";
-import { dayKey, replay } from "../engine.mjs";
+import { canMove, dayKey, play } from "../engine.mjs";
 
 const CLIENT_ID = "309032431650-0lbuaj6igc4s9tc0gddv92ffe6ngkrr4.apps.googleusercontent.com";
 const JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
@@ -133,9 +133,15 @@ function wholeNumber(value) {
   return Number.isInteger(number) && number >= 0 ? number : null;
 }
 
+function settled(value) {
+  if (value === true) return true;
+  if (value === false) return false;
+  return null;
+}
+
 async function standings(day, sub) {
   const listed = await pool.query(
-    `select s.google_sub, s.name, s.picture, s.score, b.pb
+    `select s.google_sub, s.name, s.picture, s.score, s.done, b.pb
      from challenge_scores s
      join (
        select google_sub, max(score)::int as pb
@@ -150,7 +156,7 @@ async function standings(day, sub) {
   let me = null;
   if (sub) {
     const mine = await pool.query(
-      `select name, score,
+      `select name, score, done,
               1 + (select count(*)::int from challenge_scores other
                    where other.day = $1 and other.score > challenge_scores.score) as rank,
               (select max(score)::int from challenge_scores earlier
@@ -165,6 +171,7 @@ async function standings(day, sub) {
         score: mine.rows[0].score,
         rank: mine.rows[0].rank,
         pb: wholeNumber(mine.rows[0].pb),
+        done: settled(mine.rows[0].done),
       };
     } else {
       const earlier = await pool.query(
@@ -187,6 +194,7 @@ async function standings(day, sub) {
       picture: row.picture,
       score: row.score,
       pb: wholeNumber(row.pb),
+      done: settled(row.done),
       you: sub != null && row.google_sub === sub,
     };
   });
@@ -226,18 +234,34 @@ export default {
       } catch {
         return json(origin, { error: "bad moves" }, 400);
       }
-      const score = replay(day, body?.moves);
+      const played = play(day, body?.moves);
+      const score = played.score;
+      const done = !canMove(played);
       if (score > 0) {
         await pool.query(
-          `insert into challenge_scores (day, google_sub, name, picture, score)
-           values ($1, $2, $3, $4, $5)
+          `insert into challenge_scores (day, google_sub, name, picture, score, done)
+           values ($1, $2, $3, $4, $5, $6)
            on conflict (day, google_sub) do update
              set name = excluded.name,
                  picture = excluded.picture,
                  score = excluded.score,
-                 updated_at = now()
-             where challenge_scores.score < excluded.score`,
-          [day, user.sub, displayName(user.name), displayPicture(user.picture), score],
+                 done = excluded.done,
+                 updated_at = case
+                   when challenge_scores.score < excluded.score then now()
+                   else challenge_scores.updated_at
+                 end
+             where challenge_scores.score < excluded.score
+                or (
+                  challenge_scores.score = excluded.score
+                  and excluded.done
+                  and challenge_scores.done is not true
+                )
+                or (
+                  challenge_scores.score = excluded.score
+                  and not excluded.done
+                  and challenge_scores.done is null
+                )`,
+          [day, user.sub, displayName(user.name), displayPicture(user.picture), score, done],
         );
       }
       return json(origin, await standings(day, user.sub));

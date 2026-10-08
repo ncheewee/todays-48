@@ -811,9 +811,18 @@ function applyBoard(data) {
       person.appendChild(faceFor(row.name));
     }
     person.appendChild(identity);
+    const result = document.createElement("span");
+    result.className = "result";
     const score = document.createElement("strong");
     score.textContent = formatScore(row.score);
-    item.append(place, person, score);
+    result.appendChild(score);
+    if (row.done === true || row.done === false) {
+      const state = document.createElement("span");
+      state.className = row.done ? "state finished" : "state";
+      state.textContent = row.done ? "Finished" : "Ongoing";
+      result.appendChild(state);
+    }
+    item.append(place, person, result);
     standingsList.appendChild(item);
   }
 }

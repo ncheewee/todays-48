@@ -8,6 +8,7 @@ import {
   hashDay,
   makeGame,
   move,
+  play,
   replay,
   resumeDaily,
   restore,
@@ -282,6 +283,27 @@ test("replay scores the same moves the game would", () => {
   for (const dir of moves) move(game, dir);
   assert.equal(replay(day, moves), game.score);
   assert.throws(() => replay(day, ["sideways"]), /bad move/);
+});
+
+test("a replay knows when no moves remain", () => {
+  const day = "2026-10-08";
+  const dirs = ["left", "right", "up", "down"];
+  const moves = [];
+  const game = createDaily(day);
+  assert.equal(canMove(play(day, [])), true);
+  for (let turn = 0; turn < 2000 && canMove(game); turn += 1) {
+    for (const dir of dirs) {
+      const result = move(game, dir);
+      if (!result.moved) continue;
+      moves.push(dir);
+      break;
+    }
+  }
+  assert.equal(canMove(game), false);
+  const played = play(day, moves);
+  assert.equal(played.score, game.score);
+  assert.equal(canMove(played), false);
+  assert.equal(replay(day, moves), played.score);
 });
 
 function cellsFrom(snap) {

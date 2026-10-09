@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  MAX_DRAWS,
+  MAX_MOVES,
   canMove,
   createDaily,
   createGame,
@@ -312,3 +315,31 @@ function cellsFrom(snap) {
     .sort()
     .join(" ");
 }
+
+// A real game on the 2026-10-10 board that runs to 4652 moves and an 8192
+// tile. Before the fix the 2000-move cap stopped it at 46,204 points.
+function longGame() {
+  const text = readFileSync(new URL("./fixtures/long-game-2026-10-10.txt", import.meta.url), "utf8");
+  const names = { l: "left", r: "right", u: "up", d: "down" };
+  return [...text.trim()].map((letter) => names[letter]);
+}
+
+test("a game longer than 2000 moves still counts in full", () => {
+  const day = "2026-10-10";
+  const moves = longGame();
+  assert.ok(moves.length > 2000);
+  const game = createDaily(day);
+  for (const dir of moves) assert.equal(move(game, dir).moved, true);
+  const played = play(day, moves);
+  assert.equal(played.score, game.score);
+  assert.ok(played.score > 100_000);
+  assert.ok(played.score > play(day, moves.slice(0, 2000)).score);
+  assert.ok(Math.max(...played.tiles.map((tile) => tile.value)) >= 8192);
+  assert.equal(canMove(played), false);
+  assert.ok(game.rng.draw() <= MAX_DRAWS);
+});
+
+test("the move cap still turns away lists no game could produce", () => {
+  assert.ok(MAX_MOVES >= 100_000);
+  assert.throws(() => play("2026-10-10", Array(MAX_MOVES + 1).fill("left")), /bad moves/);
+});

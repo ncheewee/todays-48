@@ -1,4 +1,6 @@
 import {
+  MAX_DRAWS,
+  MAX_MOVES,
   canMove,
   createDaily,
   dayKey,
@@ -87,7 +89,7 @@ function readSave() {
     const data = JSON.parse(raw);
     if (!data || data.v !== 1 || data.day !== dayKey()) return null;
     if (!Array.isArray(data.tiles) || data.tiles.length > 16) return null;
-    if (!Number.isInteger(data.draw) || data.draw < 0 || data.draw > 10000) return null;
+    if (!Number.isInteger(data.draw) || data.draw < 0 || data.draw > MAX_DRAWS) return null;
     const seen = new Set();
     for (const tile of data.tiles) {
       if (!tile || !Number.isInteger(tile.id) || !isPowerOfTwo(tile.value)) return null;
@@ -103,7 +105,7 @@ function readSave() {
 }
 
 function validMoves(list) {
-  if (!Array.isArray(list) || list.length > 2000) return null;
+  if (!Array.isArray(list) || list.length > MAX_MOVES) return null;
   if (!list.every((dir) => MOVE_NAMES.has(dir))) return null;
   return list.slice();
 }
@@ -402,7 +404,7 @@ function tryMove(dir) {
   const result = move(game, dir);
   if (!result.moved) return null;
   if (movesTrusted) {
-    if (moves.length >= 2000) {
+    if (moves.length >= MAX_MOVES) {
       movesTrusted = false;
       moves = [];
     } else {

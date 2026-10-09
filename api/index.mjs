@@ -1,5 +1,5 @@
 import pg from "pg";
-import { canMove, dayKey, play } from "../engine.mjs";
+import { MAX_MOVES, canMove, dayKey, play } from "../engine.mjs";
 
 const CLIENT_ID = "309032431650-0lbuaj6igc4s9tc0gddv92ffe6ngkrr4.apps.googleusercontent.com";
 const JWKS_URL = "https://www.googleapis.com/oauth2/v3/certs";
@@ -13,6 +13,9 @@ const pool = process.env.DATABASE_URL
   ? new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3 })
   : null;
 pool?.on("error", () => {});
+
+// A JSON move list costs at most 8 characters a move ("right",).
+const MAX_BODY = MAX_MOVES * 8 + 1024;
 
 let keyCache = null;
 
@@ -227,7 +230,7 @@ export default {
       const user = await caller(request);
       if (!user) return json(origin, { error: "unauthorized" }, 401);
       const text = await request.text();
-      if (text.length > 64_000) return json(origin, { error: "bad moves" }, 400);
+      if (text.length > MAX_BODY) return json(origin, { error: "bad moves" }, 400);
       let body;
       try {
         body = JSON.parse(text);

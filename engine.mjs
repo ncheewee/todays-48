@@ -44,9 +44,20 @@ export function seededRng(seed) {
 
 const MOVE_NAMES = new Set(["left", "right", "up", "down"]);
 
+// Every move that counts spawns a 2 or a 4, so the tiles on the board add up
+// to at least twice the number of moves. Sixteen tiles can't add up to more
+// than about 2^18, so no real game runs past 2^17 moves. The old cap of 2000
+// moves cut off strong players near 46k points, around their first 4096.
+// The cap only bounds work and payload size; the replay below is what keeps
+// scores honest.
+export const MAX_MOVES = 131072;
+
+// Two draws per spawn: one picks the cell, one picks 2 or 4.
+export const MAX_DRAWS = 4 + 2 * MAX_MOVES;
+
 export function play(day, moves) {
   if (!DAY.test(day)) throw new Error("bad day");
-  if (!Array.isArray(moves) || moves.length > 2000) throw new Error("bad moves");
+  if (!Array.isArray(moves) || moves.length > MAX_MOVES) throw new Error("bad moves");
   const game = createDaily(day);
   for (const dir of moves) {
     if (!MOVE_NAMES.has(dir)) throw new Error("bad move");

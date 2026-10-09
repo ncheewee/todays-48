@@ -1,4 +1,6 @@
 import {
+  MAX_DRAWS,
+  MAX_MOVES,
   canMove,
   createDaily,
   dayKey,
@@ -87,7 +89,7 @@ function readSave() {
     const data = JSON.parse(raw);
     if (!data || data.v !== 1 || data.day !== dayKey()) return null;
     if (!Array.isArray(data.tiles) || data.tiles.length > 16) return null;
-    if (!Number.isInteger(data.draw) || data.draw < 0 || data.draw > 10000) return null;
+    if (!Number.isInteger(data.draw) || data.draw < 0 || data.draw > MAX_DRAWS) return null;
     const seen = new Set();
     for (const tile of data.tiles) {
       if (!tile || !Number.isInteger(tile.id) || !isPowerOfTwo(tile.value)) return null;
@@ -103,7 +105,7 @@ function readSave() {
 }
 
 function validMoves(list) {
-  if (!Array.isArray(list) || list.length > 2000) return null;
+  if (!Array.isArray(list) || list.length > MAX_MOVES) return null;
   if (!list.every((dir) => MOVE_NAMES.has(dir))) return null;
   return list.slice();
 }
@@ -402,7 +404,7 @@ function tryMove(dir) {
   const result = move(game, dir);
   if (!result.moved) return null;
   if (movesTrusted) {
-    if (moves.length >= 2000) {
+    if (moves.length >= MAX_MOVES) {
       movesTrusted = false;
       moves = [];
     } else {
@@ -540,7 +542,7 @@ undoBtn.addEventListener("click", () => {
 
 window.addEventListener("online", () => {
   syncNet();
-  loadBoard();
+  upgradeSession().finally(loadBoard);
 });
 window.addEventListener("offline", () => {
   syncNet();
@@ -634,18 +636,89 @@ function decodePart(part) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
+// The sign-in lives in localStorage so it survives closing the tab or the
+// installed app. It holds the board's own session token (kind "board"),
+// which the server keeps alive for 60 days from last use and deletes on
+// sign-out. If the board can't hand one out, it falls back to the hour-long
+// Google token (kind "google"), as before.
 function readSession() {
   try {
-    const data = JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null");
+    let raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) {
+      // Older builds kept the Google token in sessionStorage.
+      raw = sessionStorage.getItem(SESSION_KEY);
+      if (raw) {
+        sessionStorage.removeItem(SESSION_KEY);
+        localStorage.setItem(SESSION_KEY, raw);
+      }
+    }
+    const data = JSON.parse(raw || "null");
     if (!data || typeof data.credential !== "string" || !Number.isInteger(data.exp)) return null;
     if (data.exp * 1000 < Date.now() + 30_000) {
-      sessionStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_KEY);
       return null;
     }
     return data;
   } catch {
     return null;
   }
+}
+
+function writeSession(data) {
+  try {
+    localStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_KEY);
+    sessionStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Storage can be blocked. Nothing was kept, so nothing to clear.
+  }
+}
+
+function sessionUrl() {
+  return `${BOARD_API}?session`;
+}
+
+// Swap a Google token for a long-lived board session.
+async function upgradeSession() {
+  const session = readSession();
+  if (!session || session.kind === "board" || !BOARD_API || !navigator.onLine) return;
+  try {
+    const response = await fetch(sessionUrl(), {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.credential}` },
+    });
+    if (!response.ok) return;
+    const data = await response.json();
+    const next = data?.session;
+    if (typeof next?.token !== "string" || !Number.isFinite(next.expires)) return;
+    if (readSession()?.credential !== session.credential) return;
+    writeSession({
+      kind: "board",
+      credential: next.token,
+      name: cleanName(next.name || session.name),
+      picture: safePicture(next.picture || session.picture),
+      sub: typeof next.sub === "string" ? next.sub : session.sub,
+      exp: Math.floor(next.expires / 1000),
+    });
+  } catch {
+    // Keep the Google token; the next visit tries again.
+  }
+}
+
+// The server pushes a board session's expiry out each time it is used.
+function noteSession(info) {
+  if (!Number.isFinite(info?.expires)) return;
+  const session = readSession();
+  if (session?.kind !== "board") return;
+  writeSession({ ...session, exp: Math.floor(info.expires / 1000) });
 }
 
 function pbPhrase() {
@@ -702,19 +775,30 @@ function paintWho() {
   paintRank();
 }
 
-function signOut() {
+// revoke: also tell the server to forget this device's session. Not needed
+// when the server already turned the token down.
+function signOut(revoke = true) {
+  const session = readSession();
   boardMe = null;
   knownPb = null;
+  clearSession();
+  if (revoke && session?.kind === "board" && BOARD_API) {
+    fetch(sessionUrl(), {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${session.credential}` },
+      keepalive: true,
+    }).catch(() => {});
+  }
   try {
-    sessionStorage.removeItem(SESSION_KEY);
+    window.google?.accounts?.id?.disableAutoSelect();
   } catch {
-    // The board still shows. The next visit simply asks again.
+    // Google's script may not have loaded.
   }
   paintWho();
   loadBoard();
 }
 
-function onCredential(response) {
+async function onCredential(response) {
   const credential = response?.credential;
   if (!credential) return;
   let payload;
@@ -724,21 +808,17 @@ function onCredential(response) {
     return;
   }
   if (typeof payload.sub !== "string" || !Number.isInteger(payload.exp)) return;
-  try {
-    sessionStorage.setItem(
-      SESSION_KEY,
-      JSON.stringify({
-        credential,
-        name: cleanName(payload.name),
-        picture: safePicture(payload.picture),
-        sub: payload.sub,
-        exp: payload.exp,
-      }),
-    );
-  } catch {
-    return;
-  }
+  const stored = writeSession({
+    kind: "google",
+    credential,
+    name: cleanName(payload.name),
+    picture: safePicture(payload.picture),
+    sub: payload.sub,
+    exp: payload.exp,
+  });
+  if (!stored) return;
   paintWho();
+  await upgradeSession();
   if (movesTrusted && game.score > 0) scheduleSubmit(0);
   else loadBoard();
 }
@@ -766,6 +846,7 @@ function startGoogle() {
 }
 
 function applyBoard(data) {
+  noteSession(data?.session);
   const next = data?.me || null;
   if (knownPb == null && Number.isInteger(next?.pb) && next.pb > 0) knownPb = next.pb;
   boardMe = next;
@@ -850,7 +931,7 @@ async function loadBoard() {
     const response = await fetch(BOARD_API, { headers });
     if (epoch !== boardEpoch) return;
     if (response.status === 401) {
-      if (session) signOut();
+      if (session) signOut(false);
       return;
     }
     if (!response.ok) {
@@ -884,7 +965,7 @@ async function submitScore() {
     });
     if (epoch !== boardEpoch) return;
     if (response.status === 401) {
-      signOut();
+      signOut(false);
       return;
     }
     if (!response.ok) return;
@@ -909,9 +990,17 @@ function closeStandings() {
   openBoardBtn.focus({ preventScroll: true });
 }
 
+// Signing in or out in another tab shows up here too.
+window.addEventListener("storage", (event) => {
+  if (event.key !== SESSION_KEY) return;
+  boardMe = null;
+  paintWho();
+  loadBoard();
+});
+
 whoYou.addEventListener("click", openStandings);
 openBoardBtn.addEventListener("click", openStandings);
-signOutBtn.addEventListener("click", signOut);
+signOutBtn.addEventListener("click", () => signOut());
 standingsClose.addEventListener("click", closeStandings);
 standings.addEventListener("click", (event) => {
   if (event.target === standings) closeStandings();
@@ -928,5 +1017,5 @@ paintScore();
 syncUndo();
 syncNet();
 paintWho();
-loadBoard();
+upgradeSession().finally(loadBoard);
 maybeModalOnLoad();

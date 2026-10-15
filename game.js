@@ -592,7 +592,7 @@ if ("serviceWorker" in navigator) {
     }
     window.location.reload();
   });
-  navigator.serviceWorker.register("/todays-48/sw.js", { scope: "/todays-48/", updateViaCache: "none" }).catch(() => {
+  navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {
     // Registration fails on file:// and on a few locked-down browsers. The game still plays online.
   });
 }

@@ -1,10 +1,10 @@
 {
-  "id": "./challenge",
+  "id": "/todays-48/",
   "name": "2048 Challenge",
   "short_name": "Challenge",
   "description": "One 2048 board for everyone today. Sign in to climb the board. Plays offline.",
-  "start_url": "./index.html",
-  "scope": "./",
+  "start_url": "/todays-48/",
+  "scope": "/todays-48/",
   "display": "standalone",
   "orientation": "any",
   "background_color": "#141b2b",

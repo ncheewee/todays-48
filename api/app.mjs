@@ -166,6 +166,36 @@ function settled(value) {
   return null;
 }
 
+// The last `count` finished days before `day`, newest first, as SGT day keys.
+export function pastDays(day, count) {
+  const [y, m, d] = day.split("-").map(Number);
+  const keys = [];
+  for (let back = 1; back <= count; back += 1) {
+    keys.push(new Date(Date.UTC(y, m - 1, d - back)).toISOString().slice(0, 10));
+  }
+  return keys;
+}
+
+async function winners(pool, day, count) {
+  const days = pastDays(day, count);
+  const found = await pool.query(
+    `select distinct on (day) day, name, picture, score
+     from challenge_scores
+     where day = any($1::text[]) and score > 0
+     order by day, score desc, updated_at asc`,
+    [days],
+  );
+  const byDay = new Map(found.rows.map((row) => [row.day, row]));
+  return {
+    days: days.map((key) => {
+      const row = byDay.get(key);
+      return row
+        ? { day: key, name: row.name, picture: row.picture, score: row.score }
+        : { day: key, name: null, picture: null, score: null };
+    }),
+  };
+}
+
 async function standings(pool, day, sub) {
   const listed = await pool.query(
     `select s.google_sub, s.name, s.picture, s.score, s.done, b.pb
@@ -332,6 +362,13 @@ export function createApp({
           return json(origin, { error: "method" }, 405);
         }
         const day = today();
+        const url = new URL(request.url);
+        if (url.searchParams.has("winners") || url.pathname.replace(/\/+$/, "") === "/winners") {
+          if (request.method !== "GET") return json(origin, { error: "method" }, 405);
+          const asked = Number(url.searchParams.get("days") || 7);
+          const count = Number.isInteger(asked) ? Math.min(Math.max(asked, 1), 30) : 7;
+          return json(origin, await winners(pool, day, count));
+        }
         if (request.method === "GET") {
           const { user, session } = await caller(request);
           return json(origin, { ...(await standings(pool, day, user?.sub ?? null)), session });

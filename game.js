@@ -975,6 +975,93 @@ async function submitScore() {
   }
 }
 
+const winnersBox = document.getElementById("winners");
+const winnersRow = document.getElementById("winners-row");
+const WINNER_HUES = [12, 38, 152, 196, 222, 262, 300, 340];
+let winnersLoadedFor = "";
+
+function winnerFace(name) {
+  const clean = cleanName(name);
+  let hash = 0;
+  for (const ch of clean) hash = (hash * 31 + ch.codePointAt(0)) >>> 0;
+  const face = document.createElement("span");
+  face.className = "winner-face";
+  face.setAttribute("aria-hidden", "true");
+  face.style.background = `hsl(${WINNER_HUES[hash % WINNER_HUES.length]} 55% 46%)`;
+  const parts = clean.split(/\s+/).filter(Boolean);
+  face.textContent = (parts.length > 1 ? parts[0][0] + parts[parts.length - 1][0] : clean.slice(0, 2))
+    .toUpperCase();
+  return face;
+}
+
+function winnerDate(key) {
+  const [y, m, d] = key.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const weekday = date.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" });
+  return `${weekday} ${d}`;
+}
+
+function paintWinners(days) {
+  winnersRow.replaceChildren();
+  for (const entry of days) {
+    const item = document.createElement("li");
+    item.className = entry.name ? "winner" : "winner none";
+    const when = document.createElement("span");
+    when.className = "winner-day";
+    when.textContent = winnerDate(entry.day);
+    item.appendChild(when);
+    if (entry.name) {
+      const picture = safePicture(entry.picture);
+      if (picture) {
+        const img = document.createElement("img");
+        img.className = "winner-face";
+        img.alt = "";
+        img.width = 48;
+        img.height = 48;
+        img.referrerPolicy = "no-referrer";
+        img.src = picture;
+        img.addEventListener("error", () => img.replaceWith(winnerFace(entry.name)));
+        item.appendChild(img);
+      } else {
+        item.appendChild(winnerFace(entry.name));
+      }
+      const name = document.createElement("span");
+      name.className = "winner-name";
+      name.textContent = cleanName(entry.name);
+      const score = document.createElement("strong");
+      score.className = "winner-score";
+      score.textContent = formatScore(entry.score);
+      item.append(name, score);
+      item.setAttribute("aria-label", `${winnerDate(entry.day)}: ${cleanName(entry.name)}, ${formatScore(entry.score)}`);
+    } else {
+      const face = document.createElement("span");
+      face.className = "winner-face";
+      face.setAttribute("aria-hidden", "true");
+      face.textContent = "–";
+      const name = document.createElement("span");
+      name.className = "winner-name";
+      name.textContent = "No winner";
+      item.append(face, name);
+    }
+    winnersRow.appendChild(item);
+  }
+  winnersBox.hidden = days.length === 0;
+}
+
+async function loadWinners() {
+  if (!BOARD_API || !navigator.onLine || winnersLoadedFor === puzzleDay) return;
+  try {
+    const response = await fetch(`${BOARD_API}?winners&days=7`);
+    if (!response.ok) return;
+    const payload = await response.json();
+    if (!Array.isArray(payload?.days)) return;
+    winnersLoadedFor = puzzleDay;
+    paintWinners(payload.days);
+  } catch {
+    // The strip just stays hidden offline.
+  }
+}
+
 function openStandings() {
   if (modalKind) return;
   standings.hidden = false;
@@ -982,6 +1069,7 @@ function openStandings() {
   standingsWhen.textContent = prettyDay(puzzleDay);
   standingsClose.focus();
   loadBoard();
+  loadWinners();
 }
 
 function closeStandings() {

@@ -193,3 +193,24 @@ test("the old Google token still works for posting", async () => {
   assert.equal(response.status, 200);
   assert.equal((await response.json()).session, null);
 });
+
+test("winners lists the top score for each of the last finished days", async () => {
+  const pool = {
+    async query(sql, params) {
+      assert.match(sql, /distinct on \(day\)/);
+      assert.deepEqual(params[0], ["2026-10-15", "2026-10-14", "2026-10-13"]);
+      return { rows: [{ day: "2026-10-14", name: "Wee", picture: null, score: 900 }] };
+    },
+  };
+  const app = createApp({ pool, today: () => "2026-10-16" });
+  const response = await app.fetch(
+    new Request("https://board.test/?winners&days=3", { headers: { Origin: ORIGIN } }),
+  );
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("Access-Control-Allow-Origin"), ORIGIN);
+  assert.deepEqual((await response.json()).days, [
+    { day: "2026-10-15", name: null, picture: null, score: null },
+    { day: "2026-10-14", name: "Wee", picture: null, score: 900 },
+    { day: "2026-10-13", name: null, picture: null, score: null },
+  ]);
+});

@@ -506,6 +506,20 @@ window.addEventListener("keydown", (event) => {
 });
 
 let pointer = null;
+
+// touch-action is not enough on every phone. Cancelling the touch's default
+// stops a fast second tap from zooming. Pointer events still move the tiles,
+// and buttons, the sign-in control, and the scrolling board are left alone.
+document.addEventListener(
+  "touchstart",
+  (event) => {
+    const target = event.target instanceof Element ? event.target : event.target.parentElement;
+    if (target?.closest("button, a, input, textarea, iframe, #google, .modal")) return;
+    event.preventDefault();
+  },
+  { passive: false },
+);
+
 board.addEventListener("pointerdown", (event) => {
   if (event.button !== 0) return;
   pointer = { x: event.clientX, y: event.clientY, id: event.pointerId };

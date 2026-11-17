@@ -19,6 +19,8 @@ html, body {
   min-height: 100%;
   background: var(--bg);
   color: var(--ink);
+  /* manipulation keeps a deliberate pinch, but a quick second tap must not zoom. */
+  touch-action: manipulation;
 }
 
 body {
@@ -214,6 +216,8 @@ button.who-you:hover { background: #2c3a52; }
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+
+.board * { touch-action: none; }
 
 .cell {
   border-radius: 8px;
